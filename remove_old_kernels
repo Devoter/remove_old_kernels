@@ -1,0 +1,77 @@
+#!/bin/bash
+
+VERSION="1.0.0"
+
+while [[ $# -gt 0 ]]; do
+    KEY="$1"
+
+    case $KEY in
+        -d|--dry-run)
+            DRY_RUN=1
+            shift
+            ;;
+        -t|--tools)
+            REMOVE_TOOLS=1
+            shift
+            ;;
+        -c|--cloud-tools)
+            REMOVE_CLOUD_TOOLS=1
+            shift
+            ;;
+        -v|--version)
+            echo "the script version is $VERSION"
+            exit
+            ;;
+        -h|--help)
+            echo "Usage: $0 [FLAGS]"
+            echo "  -d, --dry-run     - only print packages"
+            echo "  -t, --tools       - remove HWE tools"
+            echo "  -c, --cloud-tools - remove HWE cloud tools"
+            echo "  -v, --version     - print the script version"
+            echo "  -h, --help        - show this text"
+            exit
+            ;;
+        *)
+            echo "unrecognized option '$KEY'"
+            echo "Try '$0 --help' for more information"
+            exit 2
+            ;;
+    esac
+done
+
+uname -a
+IN_USE=$(uname -r)
+KERNEL_VER=$(echo $IN_USE | sed -e 's/-[a-z0-9_]*$//g')
+echo "Your in use kernel is $IN_USE"
+
+SEARCH_CMD="dpkg --list | grep -v '$IN_USE' | \
+egrep -v 'linux-hwe.*-headers-$KERNEL_VER"
+
+if [[ $REMOVE_TOOLS -eq 1 ]]; then
+    SEARCH_CMD="$SEARCH_CMD|linux-hwe.*-tools-$KERNEL_VER"
+fi
+
+if [[ $REMOVE_CLOUD_TOOLS -eq 1 ]]; then
+    SEARCH_CMD="$SEARCH_CMD|linux-hwe.*-cloud-tools-$KERNEL_VER"
+fi
+
+SEARCH_CMD="$SEARCH_CMD' | \
+grep -Ei 'linux-image|linux-headers|linux-modules|linux-hwe.*-.*-headers"
+
+if [[ $REMOVE_TOOLS -eq 1 ]]; then
+    SEARCH_CMD="$SEARCH_CMD|linux-hwe.*-tools"
+fi
+
+if [[ $REMOVE_CLOUD_TOOLS -eq 1 ]]; then
+    SEARCH_CMD="$SEARCH_CMD|linux-hwe.*-cloud-tools"
+fi
+
+SEARCH_CMD="$SEARCH_CMD' | awk '{ print \$2 }'"
+OLD_KERNELS=$(eval $SEARCH_CMD)
+
+if [[ $DRY_RUN -eq 1 ]]; then
+    echo "Old Kernels to be removed:"
+    echo "$OLD_KERNELS"
+else
+    sudo apt purge -y $OLD_KERNELS
+fi
